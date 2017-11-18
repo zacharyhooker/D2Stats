@@ -600,6 +600,14 @@ func DropNotifier()
 								$notify = GetGUIOption("notify-custom")
 								$text = $text
 								$clr = 3
+								if($quality=0) then $clr = 8
+								if($quality=1) then $clr = 0
+								if($quality=2) then $clr = 0
+								if($quality=3) then $clr = 0
+								if($quality=4) then $clr = 3
+								if($quality=5) then $clr = 2
+								if($quality=6) then $clr = 9 ;rare
+								if($quality=7) then $clr = 4 ;unique
 							else
 								$notify = 0
 							endif

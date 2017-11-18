@@ -1,6 +1,8 @@
-Apple||
-Arcane Shard||
 Jewel|Rare|
 Ring|Rare|
 Amulet|Rare|
-Scale Mail||2
+Ancient Armor||
+Full Plate Mail||
+Kriegsmesser||
+Gilded Shield||
+Avenger Guard||
