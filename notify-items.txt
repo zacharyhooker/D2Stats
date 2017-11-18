@@ -1,0 +1,6 @@
+Apple||
+Arcane Shard||
+Jewel|Rare|
+Ring|Rare|
+Amulet|Rare|
+Scale Mail||2

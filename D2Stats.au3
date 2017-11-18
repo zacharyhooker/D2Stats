@@ -5,6 +5,7 @@
 #include <Misc.au3>
 #include <HotKey.au3>
 #include <HotKeyInput.au3>
+#include <File.au3>
 
 #pragma compile(Icon, Assets/icon.ico)
 #pragma compile(FileDescription, Diablo II Stats reader)
@@ -59,7 +60,7 @@ local $hotkey_enabled = False
 
 local $opts_general = 3
 local $opts_hotkey = 5
-local $opts_notify = 6
+local $opts_notify = 7
 
 local $options[][5] = [ _
 ["nopickup", 0, "cb", "Automatically enable /nopickup"], _
@@ -75,8 +76,8 @@ local $options[][5] = [ _
 ["notify-sacred", 1, "cb", "Sacred uniques and jewelry"], _
 ["notify-set", 1, "cb", "Set items"], _
 ["notify-shrine", 1, "cb", "Shrines"], _
-["notify-respec", 1, "cb", "Belladonna Extract"] ]
-
+["notify-respec", 1, "cb", "Belladonna Extract"], _
+["notify-custom", 1, "cb", "Custom Items (notify-items.txt)"] ]
 
 CreateGUI()
 Main()
@@ -498,13 +499,15 @@ func DropNotifierSetup()
 		"Mystic Orb\|(.*)" ]
 	local $iMatches = UBound($matches) - 1
 	
-	local $match, $group, $text
+	local $match, $group, $text, $quality_threshold, $tier_threshold
 	
-	redim $notify_list[$nItems][3]
-	
+	redim $notify_list[$nItems][5]
+	local $custom_items = GetCustomItems()
 	for $class = 0 to $nItems - 1
 		$group = ""
 		$text = ""
+		$quality_threshold = 0
+		$tier_threshold = "Sacred"
 		
 		$base = $pItemsTxt + 0x1A8 * $class
 		
@@ -514,8 +517,13 @@ func DropNotifierSetup()
 		
 		$name = StringReplace($name, @LF, "|")
 		$name = StringRegExpReplace($name, "ÿc.", "")
-
-		if (_MemoryRead($base + 0x84, $d2handle)) then
+		local $indx = _ArraySearch($custom_items, StringRegExpReplace($name, ' ?\(([^)]+)\)', ''), default, default, default, 1, default, 1)
+		if $indx <> -1 then
+			$quality_threshold = GetQuality($custom_items[$indx][0])
+			$tier_threshold = $custom_items[$indx][2]
+			$text = $name
+			$group = "custom"
+		elseif (_MemoryRead($base + 0x84, $d2handle)) then
 			$group = StringInStr($name, "(Sacred)") ? "sacred" : "tiered"
 			$text = $name
 		elseif ($name == "Ring" or $name == "Amulet" or $name == "Jewel" or StringInStr($name, "Quiver")) then
@@ -539,12 +547,17 @@ func DropNotifierSetup()
 			next
 		endif
 
+		;$text = $name
+		;$group = ""
+
 		$notify_list[$class][0] = $group
 		$notify_list[$class][1] = $text
 		$notify_list[$class][2] = $name
+		$notify_list[$class][3] = $quality_threshold 
+		$notify_list[$class][4] = $tier_threshold
 	next
 	
-	if (not @compiled) then _ArrayDisplay($notify_list)
+	;if (not @compiled) then _ArrayDisplay($notify_list)
 endfunc
 
 func DropNotifier()
@@ -558,7 +571,7 @@ func DropNotifier()
 	
 	local $path, $unit, $data
 	local $type, $class, $quality, $notify, $group, $text, $clr
-	
+
 	for $i = 0 to $nPaths-1
 		$path = _MemoryRead($pPaths + 4*$i, $d2handle)
 		$unit = _MemoryRead($path + 0x74, $d2handle)
@@ -571,16 +584,26 @@ func DropNotifier()
 				
 				$group = $notify_list[$class][0]
 				$text = $notify_list[$class][1]
-				
+				$quality_threshold = $notify_list[$class][3]
+				$tier_threshold = $notify_list[$class][4]
 				if ($text <> "") then
 					$data = _MemoryRead($unit + 0x14, $d2handle)
 					$notify = 1
 					$clr = 8 ; Orange
-					
+
+
+					_Log("Basic", "Class: "&$class&" | Text: "&$text&" | Group: "&$group)
 					if ($group <> "") then
 						$quality = _MemoryRead($data + 0x0, $d2handle)
-						
-						if ($quality == 5) then
+						if ($group = "custom") then
+							if ($quality >= $quality_threshold) then
+								$notify = GetGUIOption("notify-custom")
+								$text = $text
+								$clr = 3
+							else
+								$notify = 0
+							endif
+						elseif ($quality == 5) then
 							$notify = GetGUIOption("notify-set")
 							$clr = 2 ; Green
 						elseif ($quality == 7 or ($group <> "tiered" and $group <> "sacred")) then
@@ -604,6 +627,46 @@ func DropNotifier()
 			$unit = _MemoryRead($unit + 0xE8, $d2handle)
 		wend
 	next
+endfunc
+
+func GetCustomItems()
+  Local $tmp, $count=0, $file = "notify-items.txt"
+  _FileReadToArray($file, $tmp, 2, "|")
+  Local $items[_FileCountLines($file)][3]
+  for $item_row in $tmp
+
+    if not $item_row[1] then $item_row[1] = ''
+    $items[$count][0] = $item_row[1]
+    $items[$count][1] = $item_row[0]
+    $items[$count][2] = $item_row[2] 
+    $count = $count+1
+  Next
+  return $items
+endfunc
+
+
+
+func GetQuality($text)
+	$quality = NULL
+	Select
+		case $text = 'crafted'
+			$quality = 0
+		case $text = 'inferior'
+			$quality = 1
+		case $text = 'Normal'
+			$quality = 2
+		case $text = 'Superior'
+			$quality = 3
+		case $text = 'Magic'
+			$quality = 4
+		case $text = 'Set'
+			$quality = 5
+		case $text = 'Rare'
+			$quality = 6
+		case $text = 'Unique'
+			$quality = 7
+	EndSelect
+	return $quality
 endfunc
 #EndRegion
 
