@@ -604,7 +604,7 @@ func DropNotifier()
 							if ($quality >= $quality_threshold) then
 								$notify = GetGUIOption("notify-custom")
 								$tier = _StringBetween($text, '(', ')')
-								if($tier[0]) then
+								if(UBound($tier)>0) then
 									if($tier[0] >= $tier_threshold) then
 										$notify = GetGUIOption("notify-custom")
 									else

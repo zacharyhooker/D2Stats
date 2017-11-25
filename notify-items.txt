@@ -5,4 +5,3 @@ Ancient Armor||Sacred
 Kriegsmesser||Sacred
 Gilded Shield||Sacred
 Avenger Guard||Sacred
-Spiked Shield||Sacred
