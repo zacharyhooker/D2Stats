@@ -1,3 +1,6 @@
+#Region ;**** Directives created by AutoIt3Wrapper_GUI ****
+#AutoIt3Wrapper_Change2CUI=y
+#EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 #RequireAdmin
 #include <Array.au3>
 #include <WinAPI.au3>
@@ -6,6 +9,7 @@
 #include <HotKey.au3>
 #include <HotKeyInput.au3>
 #include <File.au3>
+#include <String.au3>
 
 #pragma compile(Icon, Assets/icon.ico)
 #pragma compile(FileDescription, Diablo II Stats reader)
@@ -88,7 +92,7 @@ func Main()
 
 	local $timer = TimerInit()
 	local $ingame, $showitems
-	
+
 	while 1
 		switch GUIGetMsg()
 			case $gui_event_close
@@ -98,21 +102,21 @@ func Main()
 			case $tab
 				GUICtrlSetState($btnRead, GUICtrlRead($tab) < 2 ? 16 : 32)
 		endswitch
-		
+
 		if (TimerDiff($timer) > 250) then
 			$timer = TimerInit()
-			
+
 			UpdateHandle()
 			UpdateHotkeys()
 			UpdateGUIOptions() ; Must update options after hotkeys
-			
+
 			if (IsIngame()) then
 				if (not $ingame) then DropNotifierSetup()
-				
+
 				_MemoryWrite($d2client + 0x6011B, $d2handle, GetGUIOption("hidePass") ? 0x7F : 0x01, "byte")
-				
+
 				if (GetGUIOption("mousefix") <> IsMouseFixToggle()) then ToggleMouseFix()
-				
+
 				if (IsShowItemsToggle()) then
 					if (GetGUIOption("toggleMsg")) then
 						if (_MemoryRead($d2client + 0xFADB4, $d2handle) == 0) then
@@ -126,11 +130,11 @@ func Main()
 				else
 					$showitems = False
 				endif
-				
+
 				if (GetGUIOption("nopickup") and not $ingame) then _MemoryWrite($d2client + 0x11C2F0, $d2handle, 1, "byte")
-				
+
 				if (GetGUIOption("notify-enabled")) then DropNotifier()
-				
+
 				$ingame = True
 			else
 				$ingame = False
@@ -157,10 +161,10 @@ endfunc
 func UpdateHandle()
 	if (TimerDiff($lastUpdate) < 100) then return
 	$lastUpdate = TimerInit()
-	
+
 	local $hwnd = WinGetHandle("[CLASS:Diablo II]")
 	local $pid = WinGetProcess($hwnd)
-	
+
 	if ($pid == -1) then return _CloseHandle()
 	if ($pid == $d2pid) then return
 
@@ -168,12 +172,12 @@ func UpdateHandle()
 	$failCounter += 1
 	$d2handle = _MemoryOpen($pid)
 	if (@error) then return _Debug("UpdateHandle", "Couldn't open Diablo II memory handle.")
-	
+
 	if (not UpdateDllHandles()) then
 		_CloseHandle()
 		return _Debug("UpdateHandle", "Couldn't update dll handles.")
 	endif
-	
+
 	if (not InjectFunctions()) then
 		_CloseHandle()
 		return _Debug("UpdateHandle", "Couldn't inject functions.")
@@ -196,7 +200,7 @@ endfunc
 
 func _Log($function, $msg, $error = @error, $extended = @extended)
 	$logstr &= StringFormat("[%s] %s (error: %s; extended: %s)%s", $function, $msg, $error, $extended, @CRLF)
-	
+
 	if ($failCounter >= 10) then
 		MsgBox(0, "D2Stats Error", "Failed too many times in a row. Check log for details. Closing D2Stats...")
 		exit
@@ -230,14 +234,14 @@ func UpdateHotkeys()
 		if (GetGUIOptionType($opt) == "hk") then
 			$old = GetGUIOption($opt)
 			$value = _GUICtrlHKI_GetHotKey($gui_opt[$i][1])
-			
+
 			if ($old <> $value) then
 				if ($old) then _HotKey_Assign($old, 0, $HK_FLAG_D2STATS)
 				if ($value) then _HotKey_Assign($value, $gui_opt[$i][2], $HK_FLAG_D2STATS, "[CLASS:Diablo II]")
 			endif
 		endif
 	next
-	
+
 	local $enable = IsIngame()
 	if ($enable <> $hotkey_enabled) then
 		if ($enable) then
@@ -251,44 +255,44 @@ endfunc
 
 func HotKey_CopyStatsToClipboard()
 	if (not IsIngame()) then return
-	
+
 	UpdateStatValues()
 	local $ret = ""
-	
+
 	for $i = 0 to $numStats-1
 		local $val = GetStatValue($i)
-		
+
 		if ($val) then
 			$ret &= StringFormat("%s = %s%s", $i, $val, @CRLF)
 		endif
 	next
-	
+
 	ClipPut($ret)
 	PrintString("Stats copied to clipboard.")
 endfunc
 
 func HotKey_CopyItemsToClipboard()
 	if (not IsIngame()) then return
-	
+
 	local $nItems = _MemoryRead($d2common + 0x9FB94, $d2handle)
 	local $pItemsTxt = _MemoryRead($d2common + 0x9FB98, $d2handle)
 
 	local $base, $nameid, $name, $misc
 	local $ret = ""
-	
+
 	for $class = 0 to $nItems - 1
 		$base = $pItemsTxt + 0x1A8 * $class
-		
+
 		$misc = _MemoryRead($base + 0x84, $d2handle, "dword")
 		$nameid = _MemoryRead($base + 0xF4, $d2handle, "word")
-		
+
 		$name = _CreateRemoteThread($d2inject_getstring, $nameid)
 		$name = _MemoryRead($name, $d2handle, "wchar[100]")
 		$name = StringReplace($name, @LF, "|")
-		
+
 		$ret &= StringFormat("[class:%04i] [misc:%s] <%s>%s", $class, $misc ? 0 : 1, $name, @CRLF)
 	next
-	
+
 	ClipPut($ret)
 	PrintString("Items copied to clipboard.")
 endfunc
@@ -298,14 +302,14 @@ func HotKey_CopyItem()
 
 	local $timer = TimerInit()
 	local $text = ""
-	
+
 	while ($text == "" and TimerDiff($timer) < 10)
 		$text = _MemoryRead($d2win + 0xC9E58, $d2handle, "wchar[800]")
 	wend
-	
+
 	$text = StringRegExpReplace($text, "ÿc.", "")
 	local $split = StringSplit($text, @LF)
-	
+
 	$text = ""
 	for $i = $split[0] to 1 step -1
 		$text &= $split[$i] & @CRLF
@@ -353,7 +357,7 @@ endfunc
 #Region Stat reading
 func UpdateStatValueMem($ivector)
 	if ($ivector <> 0 and $ivector <> 1) then _Debug("UpdateStatValueMem", "Invalid $ivector value.")
-	
+
 	local $ptr_offsets[3] = [0, 0x5C, ($ivector+1)*0x24]
 	local $ptr = _MemoryPointerRead($d2client + 0x11BBFC, $d2handle, $ptr_offsets)
 
@@ -366,7 +370,7 @@ func UpdateStatValueMem($ivector)
 	next
 
 	local $stats = DllStructCreate($finalstruct)
-	_WinAPI_ReadProcessMemory($d2handle[1], $ptr, DllStructGetPtr($stats), DllStructGetSize($stats), 0)
+;	_WinAPI_ReadProcessMemory($d2handle[1], $ptr, DllStructGetPtr($stats), DllStructGetSize($stats), 0)
 
 	local $start = $ivector == 1 ? 5 : 0
 	local $index, $val
@@ -375,7 +379,7 @@ func UpdateStatValueMem($ivector)
 		if ($index >= $numStats) then
 			continueloop ; Should never happen
 		endif
-		
+
 		$val = DllStructGetData($stats, 3 + (3 * $i))
 		switch $index
 			case 6 to 11
@@ -391,12 +395,12 @@ func UpdateStatValues()
 		$stats_cache[0][$i] = 0
 		$stats_cache[1][$i] = 0
 	next
-	
+
 	if (IsIngame()) then
 		UpdateStatValueMem(0)
 		UpdateStatValueMem(1)
 		FixStatVelocities()
-		
+
 		; Poison damage to damage/second
 		$stats_cache[1][57] *= (25/256)
 		$stats_cache[1][58] *= (25/256)
@@ -407,13 +411,13 @@ func FixStatVelocities() ; This game is stupid
 	for $i = 67 to 69
 		$stats_cache[1][$i] = 0
 	next
-	
+
 	local $pSkillsTxt = _MemoryRead($d2sgpt + 0xB98, $d2handle)
 	local $skill, $pStats, $nStats, $txt, $index, $val, $ownerType, $ownerId, $state
-	
+
 	local $wep_main_offsets[3] = [0, 0x60, 0x1C]
 	local $wep_main = _MemoryPointerRead($d2client + 0x11BBFC, $d2handle, $wep_main_offsets)
-	
+
 	local $ptr_offsets[3] = [0, 0x5C, 0x3C]
 	local $ptr = _MemoryPointerRead($d2client + 0x11BBFC, $d2handle, $ptr_offsets)
 
@@ -429,12 +433,12 @@ func FixStatVelocities() ; This game is stupid
 		for $i = 0 to $nStats-1
 			$index = _MemoryRead($pStats + $i*8 + 2, $d2handle, "word")
 			$val = _MemoryRead($pStats + $i*8 + 4, $d2handle, "int")
-			
+
 			if ($index == 350 and $val <> 511) then $skill = $val
 			if ($ownerType == 4 and $index == 67) then $stats_cache[1][$index] += $val ; Armor FRW penalty
 		next
 		if ($ownerType == 4) then continueloop
-		
+
 		if ($state == 195) then ; Dark Power / Tome of Possession aura
 			$skill = 687 ; Dark Power
 		endif
@@ -442,7 +446,7 @@ func FixStatVelocities() ; This game is stupid
 		local $has[3] = [0,0,0]
 		if ($skill) then ; Game doesn't even bother setting the skill id for some skills, so we'll just have to assume the stat list isn't lying...
 			$txt = $pSkillsTxt + 0x23C*$skill
-		
+
 			for $i = 0 to 4
 				$index = _MemoryRead($txt + 0x98 + $i*2, $d2handle, "word")
 				switch $index
@@ -450,7 +454,7 @@ func FixStatVelocities() ; This game is stupid
 						$has[$index-67] = 1
 				endswitch
 			next
-			
+
 			for $i = 0 to 5
 				$index = _MemoryRead($txt + 0x54 + $i*2, $d2handle, "word")
 				switch $index
@@ -459,7 +463,7 @@ func FixStatVelocities() ; This game is stupid
 				endswitch
 			next
 		endif
-		
+
 		for $i = 0 to $nStats-1
 			$index = _MemoryRead($pStats + $i*8 + 2, $d2handle, "word")
 			$val = _MemoryRead($pStats + $i*8 + 4, $d2handle, "int")
@@ -484,7 +488,7 @@ func DropNotifierSetup()
 	local $pItemsTxt = _MemoryRead($d2common + 0x9FB98, $d2handle)
 
 	local $base, $nameid, $name
-	
+
 	local $matches[] = [ _
 		"Signet of Skill", _
 		".*Signet of Learning", _
@@ -498,9 +502,9 @@ func DropNotifierSetup()
 		"Great Rune\|(.*)", _
 		"Mystic Orb\|(.*)" ]
 	local $iMatches = UBound($matches) - 1
-	
+
 	local $match, $group, $text, $quality_threshold, $tier_threshold
-	
+
 	redim $notify_list[$nItems][5]
 	local $custom_items = GetCustomItems()
 	for $class = 0 to $nItems - 1
@@ -508,13 +512,13 @@ func DropNotifierSetup()
 		$text = ""
 		$quality_threshold = 0
 		$tier_threshold = "Sacred"
-		
+
 		$base = $pItemsTxt + 0x1A8 * $class
-		
+
 		$nameid = _MemoryRead($base + 0xF4, $d2handle, "word")
 		$name = _CreateRemoteThread($d2inject_getstring, $nameid)
 		$name = _MemoryRead($name, $d2handle, "wchar[100]")
-		
+
 		$name = StringReplace($name, @LF, "|")
 		$name = StringRegExpReplace($name, "ÿc.", "")
 		local $indx = _ArraySearch($custom_items, StringRegExpReplace($name, ' ?\(([^)]+)\)', ''), default, default, default, 1, default, 1)
@@ -553,35 +557,35 @@ func DropNotifierSetup()
 		$notify_list[$class][0] = $group
 		$notify_list[$class][1] = $text
 		$notify_list[$class][2] = $name
-		$notify_list[$class][3] = $quality_threshold 
+		$notify_list[$class][3] = $quality_threshold
 		$notify_list[$class][4] = $tier_threshold
 	next
-	
+
 	;if (not @compiled) then _ArrayDisplay($notify_list)
 endfunc
 
 func DropNotifier()
 	local $ptr_offsets[4] = [0, 0x2C, 0x1C, 0x0]
 	local $pPaths = _MemoryPointerRead($d2client + 0x11BBFC, $d2handle, $ptr_offsets)
-	
+
 	$ptr_offsets[3] = 0x24
 	local $nPaths = _MemoryPointerRead($d2client + 0x11BBFC, $d2handle, $ptr_offsets)
-	
+
 	if (not $pPaths or not $nPaths) then return
-	
+
 	local $path, $unit, $data
 	local $type, $class, $quality, $notify, $group, $text, $clr
 
 	for $i = 0 to $nPaths-1
 		$path = _MemoryRead($pPaths + 4*$i, $d2handle)
 		$unit = _MemoryRead($path + 0x74, $d2handle)
-		
+
 		while $unit
 			$type = _MemoryRead($unit + 0x0, $d2handle)
-			
+
 			if ($type == 4) then
 				$class = _MemoryRead($unit + 0x4, $d2handle)
-				
+
 				$group = $notify_list[$class][0]
 				$text = $notify_list[$class][1]
 				$quality_threshold = $notify_list[$class][3]
@@ -592,13 +596,21 @@ func DropNotifier()
 					$clr = 8 ; Orange
 
 
-					_Log("Basic", "Class: "&$class&" | Text: "&$text&" | Group: "&$group)
+					_Log("Item", "Class: "&$class&" | Text: "&$text&" | Group: "&$group)
 					if ($group <> "") then
 						$quality = _MemoryRead($data + 0x0, $d2handle)
+						_Log("Item","Quality: "&$quality)
 						if ($group = "custom") then
 							if ($quality >= $quality_threshold) then
 								$notify = GetGUIOption("notify-custom")
-								$text = $text
+								$tier = _StringBetween($text, '(', ')')
+								if($tier[0]) then
+									if($tier[0] >= $tier_threshold) then
+										$notify = GetGUIOption("notify-custom")
+									else
+										$notify = 0
+									endif
+								endif
 								$clr = 3
 								if($quality=0) then $clr = 8
 								if($quality=1) then $clr = 0
@@ -631,7 +643,7 @@ func DropNotifier()
 					endif
 				endif
 			endif
-			
+
 			$unit = _MemoryRead($unit + 0xE8, $d2handle)
 		wend
 	next
@@ -643,10 +655,9 @@ func GetCustomItems()
   Local $items[_FileCountLines($file)][3]
   for $item_row in $tmp
 
-    if not $item_row[1] then $item_row[1] = ''
     $items[$count][0] = $item_row[1]
     $items[$count][1] = $item_row[0]
-    $items[$count][2] = $item_row[2] 
+    $items[$count][2] = $item_row[2]
     $count = $count+1
   Next
   return $items
@@ -714,7 +725,7 @@ endfunc
 
 func NewItem($line, $text, $tip = "", $clr = -1)
 	local $arrPos = $gui[0][0] + 1
-	
+
 	$gui[$arrPos][0] = $text
 	$gui[$arrPos][1] = $gui[0][1]
 	$gui[$arrPos][2] = NewText($line, $text, $tip, $clr)
@@ -726,20 +737,20 @@ func UpdateGUI()
 	local $clr_red	= 0xFF0000
 	local $clr_gold	= 0x808000
 	local $clr_green= 0x008000
-	
+
 	local $text, $matches, $match, $width
 	local $color, $val
-	
+
 	for $i = 1 to $gui[0][0]
 		$text = $gui[$i][0]
 		$color = 0
-		
+
 		$matches = StringRegExp($text, "\[(\d+):(\d+)/(\d+)\]", 4)
 		for $j = 0 to UBound($matches)-1
 			$match = $matches[$j]
 			$text = StringReplace($text, $match[0], "")
 			$color = $clr_red
-			
+
 			$val = GetStatValue($match[1])
 			if ($val >= $match[2]) then
 				$color = $clr_green
@@ -747,17 +758,17 @@ func UpdateGUI()
 				$color = $clr_gold
 			endif
 		next
-		
+
 		$matches = StringRegExp($text, "{(\d+)}", 4)
 		for $j = 0 to UBound($matches)-1
 			$match = $matches[$j]
 			$text = StringReplace($text, $match[0], GetStatValue($match[1]))
 		next
-		
+
 		$text = StringStripWS($text, 7)
 		GUICtrlSetData($gui[$i][2], $text)
 		if ($color <> 0) then GUICtrlSetColor($gui[$i][2], $color)
-		
+
 		$width = StringWidth($text)
 		GUICtrlSetPos($gui[$i][2], $gui[$i][1]-$width/2, Default, $width, Default)
 	next
@@ -797,7 +808,7 @@ func CreateGUI()
 	local $clr_gold	= 0x808000
 	local $clr_green= 0x008000
 	local $clr_pink	= 0xFF00FF
-	
+
 	local $groupLines = 14
 	local $groupWidth = 110
 	local $groupXStart = 8 + $groupWidth/2
@@ -807,11 +818,11 @@ func CreateGUI()
 	local $guiHeight = 34 + 15*$groupLines
 	GUICreate($title, $guiWidth, $guiHeight)
 	GUISetFont(9 / _GetDPI()[2], 0, 0, "Courier New")
-	
+
 	global $btnRead = GUICtrlCreateButton("Read", $groupXStart-35, $guiHeight-31, 70, 25)
 
 	global $tab = GUICtrlCreateTab(0, 0, $guiWidth, 0, 0x8000)
-	
+
 	GUICtrlCreateTabItem("Page 1")
 	$gui[0][1] = $groupXStart
 	NewText(00, "Base stats")
@@ -819,30 +830,30 @@ func CreateGUI()
 	NewItem(02, "{002} Dexterity")
 	NewItem(03, "{003} Vitality")
 	NewItem(04, "{001} Energy")
-	
+
 	NewItem(06, "{080}% M.Find", "Magic Find")
 	NewItem(07, "{085}% Exp.Gain", "Experience gained")
 	NewItem(08, "{479} M.Skill", "Maximum Skill Level")
 	NewItem(09, "{185} Sig.Stat [185:500/500]", "Signets of Learning. Up to 500 can be used||Any sacred unique item x1-25 + Catalyst of Learning → Signet of Learning x1-25 + Catalyst of Learning|Any set item x1-25 + Catalyst of Learning → Signet of Learning x1-25 + Catalyst of Learning|Unique ring/amulet/jewel/quiver + Catalyst of Learning → Signet of Learning + Catalyst of Learning")
 	NewItem(10, "{186} Sig.Skill [186:3/3]", "Signets of Skill. Up to 3 can be used||On Destruction difficulty, monsters in the Torajan Jungles have a chance to drop these")
 	NewItem(11, "Veteran tokens [219:1/1]", "On Terror and Destruction difficulty, you can find veteran monsters near the end of|each Act. There are five types of veteran monsters, one for each Act||[Class Charm] + each of the 5 tokens → returns [Class Charm] with added bonuses| +1 to [Your class] Skill Levels| +20% to Experience Gained")
-	
-	
+
+
 	$gui[0][1] += $groupWidth
 	NewText(00, "Bonus stats")
 	NewItem(01, "{359}% Strength")
 	NewItem(02, "{360}% Dexterity")
 	NewItem(03, "{362}% Vitality")
 	NewItem(04, "{361}% Energy")
-	
+
 	NewText(06, "Item/Skill", "Speed from items and skills behave differently. Use SpeedCalc to find your breakpoints")
 	NewItem(07, "{093}%/{068}% IAS", "Increased Attack Speed")
 	NewItem(08, "{099}%/{069}% FHR", "Faster Hit Recovery")
 	NewItem(09, "{102}%/{069}% FBR", "Faster Block Rate")
 	NewItem(10, "{096}%/{067}% FRW", "Faster Run/Walk")
 	NewItem(11, "{105}%/0% FCR", "Faster Cast Rate")
-	
-	
+
+
 	$gui[0][1] += $groupWidth
 	NewItem(00, "{076}% Life", "Maximum Life")
 	NewItem(01, "{077}% Mana", "Maximum Mana")
@@ -858,8 +869,8 @@ func CreateGUI()
 	NewItem(11, "{135}% OW", "Open Wounds. Chance to disable target's natural health regen for 8 seconds")
 	NewItem(12, "{141}% DS", "Deadly Strike. Chance to double physical damage of attack")
 	NewItem(13, "{164}% UA", "Uninterruptable Attack")
-	
-	
+
+
 	$gui[0][1] += $groupWidth
 	NewText(00, "Res/Abs/Flat", "Resist / Absorb / Flat absorb")
 	NewItem(01, "{039}%/{142}%/{143}", "Fire", $clr_red)
@@ -868,15 +879,15 @@ func CreateGUI()
 	NewItem(04, "{045}%/0%/0", "Poison", $clr_green)
 	NewItem(05, "{037}%/{146}%/{147}", "Magic", $clr_pink)
 	NewItem(06, "{036}%/{034}", "Physical (aka Damage Reduction)")
-	
+
 	NewText(08, "Damage/Pierce", "Spell damage / -Enemy resist")
 	NewItem(09, "{329}%/{333}%", "Fire", $clr_red)
 	NewItem(10, "{331}%/{335}%", "Cold", $clr_blue)
 	NewItem(11, "{330}%/{334}%", "Lightning", $clr_gold)
 	NewItem(12, "{332}%/{336}%", "Poison", $clr_green)
 	NewItem(13, "{377}%/0%", "Physical/Magic", $clr_pink)
-	
-	
+
+
 	GUICtrlCreateTabItem("Page 2")
 	$gui[0][1] = $groupXStart
 	NewItem(00, "{278} SF", "Strength Factor")
@@ -887,12 +898,12 @@ func CreateGUI()
 	NewItem(05, "{109}% CLR", "Curse Length Reduction")
 	NewItem(06, "{110}% PLR", "Poison Length Reduction")
 	NewItem(07, "{489} TTAD", "Target Takes Additional Damage")
-	
+
 	NewText(09, "Slow")
 	NewItem(10, "{150}%/{376}% Tgt.", "Slows Target / Slows Melee Target")
 	NewItem(11, "{363}%/{493}% Att.", "Slows Attacker / Slows Ranged Attacker")
-	
-	
+
+
 	$gui[0][1] += $groupWidth
 	NewText(00, "Weapon Damage")
 	NewItem(01, "{048}-{049}", "Fire", $clr_red)
@@ -900,49 +911,49 @@ func CreateGUI()
 	NewItem(03, "{050}-{051}", "Lightning", $clr_gold)
 	NewItem(04, "{057}-{058}/s", "Poison/sec", $clr_green)
 	NewItem(05, "{052}-{053}", "Magic", $clr_pink)
-	
+
 	NewText(07, "Life/Mana")
 	NewItem(08, "{060}%/{062}% Leech", "Life/Mana Stolen per Hit")
 	NewItem(09, "{086}/{138} *aeK", "Life/Mana after each Kill")
 	NewItem(10, "{208}/{209} *oS", "Life/Mana on Striking")
 	NewItem(11, "{210}/{295} *oSiM", "Life/Mana on Striking in Melee")
-	
-	
+
+
 	$gui[0][1] += $groupWidth
 	NewText(00, "Minions")
 	NewItem(01, "{444}% Life")
 	NewItem(02, "{470}% Damage")
 	NewItem(03, "{487}% Resist")
 	NewItem(04, "{500}% AR", "Attack Rating")
-	
-	
+
+
 	$gui[0][1] += $groupWidth
 
 	LoadGUIOptions()
 	$gui[0][1] = 8
-	
+
 	GUICtrlCreateTabItem("Options")
 	local $i = 0
-	
+
 	for $j = 1 to $opts_general
 		NewOption($j-1, $options[$i][0], $options[$i][3], $options[$i][4])
 		$i += 1
 	next
-	
+
 	GUICtrlCreateTabItem("Hotkeys")
 	for $j = 1 to $opts_hotkey
 		NewOption($j-1, $options[$i][0], $options[$i][3], $options[$i][4])
 		$i += 1
 	next
-	
-	
+
+
 	GUICtrlCreateTabItem("Drop notifier")
 	for $j = 1 to $opts_notify
 		$gui[0][1] = $j == 1 ? 8 : 16
 		NewOption($j-1, $options[$i][0], $options[$i][3], $options[$i][4])
 		$i += 1
 	next
-	
+
 
 	GUICtrlCreateTabItem("Drop filter")
 	$gui[0][1] = 8
@@ -955,20 +966,20 @@ func CreateGUI()
 	NewTextBasic(06, " Elixirs of Experience/Greed/Concentration.", False)
 	NewTextBasic(07, " Various junk (mana potions, TP/ID scrolls and tomes, keys).", False)
 	NewTextBasic(08, " Health potions below Greater.", False)
-	
-	
+
+
 	GUICtrlCreateTabItem("About")
 	$gui[0][1] = 8
 	NewTextBasic(00, "Made by Wojen and Kyromyr, using Shaggi's offsets.", False)
 	NewTextBasic(01, "Layout help by krys.", False)
 	NewTextBasic(02, "Additional help by suchbalance and Quirinus.", False)
-	
+
 	NewTextBasic(04, "If you're unsure what any of the abbreviations mean, all of", False)
 	NewTextBasic(05, " them should have a tooltip when hovered over.", False)
-	
+
 	NewTextBasic(07, "Hotkeys can be disabled by setting them to ESC.", False)
-	
-	
+
+
 	GUICtrlCreateTabItem("")
 	UpdateGUI()
 	GUISetState(@SW_SHOW)
@@ -979,7 +990,7 @@ endfunc
 func NewOption($line, $opt, $text, $extra = 0)
 	local $arrPos = $gui_opt[0][0] + 1
 	local $y = GetLineHeight($line)*2 - GetLineHeight(0)
-	
+
 	local $control
 	local $type = GetGUIOptionType($opt)
 	if ($type == null) then
@@ -990,13 +1001,13 @@ func NewOption($line, $opt, $text, $extra = 0)
 			_Log("NewOption", "No hotkey function for option '" & $opt & "'")
 			exit
 		endif
-		
+
 		local $key = GetGUIOption($opt)
 		if ($key) then
 			_KeyLock($key)
 			_HotKey_Assign($key, $extra, $HK_FLAG_D2STATS, "[CLASS:Diablo II]")
 		endif
-		
+
 		$control = _GUICtrlHKI_Create($key, $gui[0][1], $y, 120, 25)
 		GUICtrlCreateLabel($text, $gui[0][1] + 124, $y+4)
 	elseif ($type == "cb") then
@@ -1006,11 +1017,11 @@ func NewOption($line, $opt, $text, $extra = 0)
 		_Log("NewOption", "Invalid option type '" & $type & "'")
 		exit
 	endif
-	
+
 	$gui_opt[$arrPos][0] = $opt
 	$gui_opt[$arrPos][1] = $control
 	$gui_opt[$arrPos][2] = $extra
-	
+
 	$gui_opt[0][0] = $arrPos
 endfunc
 
@@ -1043,13 +1054,13 @@ func UpdateGUIOptions()
 	for $i = 1 to $gui_opt[0][0]
 		$opt = $gui_opt[$i][0]
 		$type = GetGUIOptionType($opt)
-		
+
 		if ($type == "hk") then
 			$value = _GUICtrlHKI_GetHotKey($gui_opt[$i][1])
 		elseif ($type == "cb") then
 			$value = (GUICtrlRead($gui_opt[$i][1]) == 1) ? 1 : 0
 		endif
-		
+
 		if (GetGUIOption($opt) <> $value) then
 			$save = True
 			SetGUIOption($opt, $value)
@@ -1084,37 +1095,37 @@ endfunc
 
 func PrintString($string, $color = 0)
 	if (not WriteWString($string)) then return _Log("PrintString", "Failed to write string.")
-	
+
 	_CreateRemoteThread($d2inject_print, $color)
 	if (@error) then return _Log("PrintString", "Failed to create remote thread.")
-	
+
 	return True
 endfunc
 
 func WriteString($string)
 	if (not IsIngame()) then return _Log("WriteString", "Not ingame.")
-	
+
 	_MemoryWrite($d2inject_string, $d2handle, $string, StringFormat("char[%s]", StringLen($string)+1))
 	if (@error) then return _Log("WriteString", "Failed to write string.")
-	
+
 	return True
 endfunc
-	
+
 func WriteWString($string)
 	if (not IsIngame()) then return _Log("WriteWString", "Not ingame.")
-	
+
 	_MemoryWrite($d2inject_string, $d2handle, $string, StringFormat("wchar[%s]", StringLen($string)+1))
 	if (@error) then return _Log("WriteWString", "Failed to write string.")
-	
+
 	return True
 endfunc
 
 func GetDropFilterHandle()
 	if (not WriteString("DropFilter.dll")) then return _Debug("GetDropFilterHandle", "Failed to write string.")
-	
+
 	local $gethandle = _WinAPI_GetProcAddress(_WinAPI_GetModuleHandle("kernel32.dll"), "GetModuleHandleA")
 	if (not $gethandle) then return _Debug("GetDropFilterHandle", "Couldn't retrieve GetModuleHandleA address.")
-	
+
 	return _CreateRemoteThread($gethandle, $d2inject_string)
 endfunc
 
@@ -1129,15 +1140,15 @@ func InjectDropFilter()
 	local $path = FileGetLongName("DropFilter.dll", 1)
 	if (not FileExists($path)) then return _Debug("InjectDropFilter", "Couldn't find DropFilter.dll. Make sure it's in the same folder as " & @ScriptName & ".")
 	if (not WriteString($path)) then return _Debug("InjectDropFilter", "Failed to write DropFilter.dll path.")
-	
+
 	local $loadlib = _WinAPI_GetProcAddress(_WinAPI_GetModuleHandle("kernel32.dll"), "LoadLibraryA")
 	if (not $loadlib) then return _Debug("InjectDropFilter", "Couldn't retrieve LoadLibraryA address.")
 
 	local $ret = _CreateRemoteThread($loadlib, $d2inject_string)
 	if (@error) then return _Debug("InjectDropFilter", "Failed to create remote thread.")
-	
+
 	local $injected = _MemoryRead($d2client + 0x5907E, $d2handle, "byte")
-	
+
 	; TODO: Check if this is still needed
 	if ($ret and $injected <> 233) then
 		local $handle = _WinAPI_LoadLibrary("DropFilter.dll")
@@ -1156,7 +1167,7 @@ func InjectDropFilter()
 			$ret = False
 		endif
 	endif
-	
+
 	return $ret
 endfunc
 
@@ -1166,9 +1177,9 @@ func EjectDropFilter($handle)
 
 	local $ret = _CreateRemoteThread($freelib, $handle)
 	if (@error) then return _Debug("EjectDropFilter", "Failed to create remote thread.")
-	
+
 	if ($ret) then _MemoryWrite($d2client + 0x5907E, $d2handle, "0x833E040F85", "byte[5]")
-	
+
 	return $ret
 endfunc
 
@@ -1176,16 +1187,16 @@ endfunc
 D2Client.dll+42AE1 - A3 *                  - mov [D2Client.dll+11C3DC],eax { [00000000] }
 D2Client.dll+42AE6 - A3 *                  - mov [D2Client.dll+11C3E0],eax { [00000000] }
 ->
-D2Client.dll+42AE1 - 90                    - nop 
-D2Client.dll+42AE2 - 90                    - nop 
-D2Client.dll+42AE3 - 90                    - nop 
-D2Client.dll+42AE4 - 90                    - nop 
-D2Client.dll+42AE5 - 90                    - nop 
-D2Client.dll+42AE6 - 90                    - nop 
-D2Client.dll+42AE7 - 90                    - nop 
-D2Client.dll+42AE8 - 90                    - nop 
-D2Client.dll+42AE9 - 90                    - nop 
-D2Client.dll+42AEA - 90                    - nop 
+D2Client.dll+42AE1 - 90                    - nop
+D2Client.dll+42AE2 - 90                    - nop
+D2Client.dll+42AE3 - 90                    - nop
+D2Client.dll+42AE4 - 90                    - nop
+D2Client.dll+42AE5 - 90                    - nop
+D2Client.dll+42AE6 - 90                    - nop
+D2Client.dll+42AE7 - 90                    - nop
+D2Client.dll+42AE8 - 90                    - nop
+D2Client.dll+42AE9 - 90                    - nop
+D2Client.dll+42AEA - 90                    - nop
 #ce
 
 func IsMouseFixToggle()
@@ -1194,7 +1205,7 @@ endfunc
 
 func ToggleMouseFix()
 	local $restore = IsMouseFixToggle()
-	local $write = $restore ? "0xA3" & GetOffsetAddress($d2client + 0x11C3DC) & "A3" & GetOffsetAddress($d2client + 0x11C3E0) : "0x90909090909090909090" 
+	local $write = $restore ? "0xA3" & GetOffsetAddress($d2client + 0x11C3DC) & "A3" & GetOffsetAddress($d2client + 0x11C3E0) : "0x90909090909090909090"
 
 	_MemoryWrite($d2client + 0x42AE1, $d2handle, $write, "byte[10]")
 	; PrintString($restore ? "Mouse fix disabled." : "Mouse fix enabled.", 3)
@@ -1203,25 +1214,25 @@ endfunc
 #cs
 D2Client.dll+3AECF - A3 *                  - mov [D2Client.dll+FADB4],eax { [00000000] }
 -->
-D2Client.dll+3AECF - 90                    - nop 
-D2Client.dll+3AED0 - 90                    - nop 
-D2Client.dll+3AED1 - 90                    - nop 
-D2Client.dll+3AED2 - 90                    - nop 
-D2Client.dll+3AED3 - 90                    - nop 
+D2Client.dll+3AECF - 90                    - nop
+D2Client.dll+3AED0 - 90                    - nop
+D2Client.dll+3AED1 - 90                    - nop
+D2Client.dll+3AED2 - 90                    - nop
+D2Client.dll+3AED3 - 90                    - nop
 
 
-D2Client.dll+3B224 - CC                    - int 3 
-D2Client.dll+3B225 - CC                    - int 3 
-D2Client.dll+3B226 - CC                    - int 3 
-D2Client.dll+3B227 - CC                    - int 3 
-D2Client.dll+3B228 - CC                    - int 3 
-D2Client.dll+3B229 - CC                    - int 3 
-D2Client.dll+3B22A - CC                    - int 3 
-D2Client.dll+3B22B - CC                    - int 3 
-D2Client.dll+3B22C - CC                    - int 3 
-D2Client.dll+3B22D - CC                    - int 3 
-D2Client.dll+3B22E - CC                    - int 3 
-D2Client.dll+3B22F - CC                    - int 3 
+D2Client.dll+3B224 - CC                    - int 3
+D2Client.dll+3B225 - CC                    - int 3
+D2Client.dll+3B226 - CC                    - int 3
+D2Client.dll+3B227 - CC                    - int 3
+D2Client.dll+3B228 - CC                    - int 3
+D2Client.dll+3B229 - CC                    - int 3
+D2Client.dll+3B22A - CC                    - int 3
+D2Client.dll+3B22B - CC                    - int 3
+D2Client.dll+3B22C - CC                    - int 3
+D2Client.dll+3B22D - CC                    - int 3
+D2Client.dll+3B22E - CC                    - int 3
+D2Client.dll+3B22F - CC                    - int 3
 -->
 D2Client.dll+3B224 - 83 35 * 01            - xor dword ptr [D2Client.dll+FADB4],01 { [00000000] }
 D2Client.dll+3B22B - E9 B6000000           - jmp D2Client.dll+3B2E6
@@ -1230,7 +1241,7 @@ D2Client.dll+3B22B - E9 B6000000           - jmp D2Client.dll+3B2E6
 D2Client.dll+3B2E1 - 89 1D *               - mov [D2Client.dll+FADB4],ebx { [00000000] }
 -->
 D2Client.dll+3B2E1 - E9 3EFFFFFF           - jmp D2Client.dll+3B224
-D2Client.dll+3B2E6 - 90                    - nop 
+D2Client.dll+3B2E6 - 90                    - nop
 #ce
 
 func IsShowItemsToggle()
@@ -1241,18 +1252,18 @@ func ToggleShowItems()
 	local $write1 = "0x9090909090"
 	local $write2 = "0x8335" & GetOffsetAddress($d2client + 0xFADB4) & "01E9B6000000"
 	local $write3 = "0xE93EFFFFFF90" ; Jump within same DLL shouldn't require offset fixing
-	
+
 	local $restore = IsShowItemsToggle()
 	if ($restore) then
 		$write1 = "0xA3" & GetOffsetAddress($d2client + 0xFADB4)
 		$write2	= "0xCCCCCCCCCCCCCCCCCCCCCCCC"
 		$write3 = "0x891D" & GetOffsetAddress($d2client + 0xFADB4)
 	endif
-	
+
 	_MemoryWrite($d2client + 0x3AECF, $d2handle, $write1, "byte[5]")
 	_MemoryWrite($d2client + 0x3B224, $d2handle, $write2, "byte[12]")
 	_MemoryWrite($d2client + 0x3B2E1, $d2handle, $write3, "byte[6]")
-	
+
 	_MemoryWrite($d2client + 0xFADB4, $d2handle, 0)
 	PrintString($restore ? "Hold to show items." : "Toggle to show items.", 3)
 endfunc
@@ -1262,13 +1273,13 @@ D2Client.dll+CDE00 - 53                    - push ebx
 D2Client.dll+CDE01 - 68 *                  - push D2Client.dll+CDE10
 D2Client.dll+CDE06 - 31 C0                 - xor eax,eax
 D2Client.dll+CDE08 - E8 43FAFAFF           - call D2Client.dll+7D850
-D2Client.dll+CDE0D - C3                    - ret 
+D2Client.dll+CDE0D - C3                    - ret
 
 D2Client.dll+CDE10 - 8B CB                 - mov ecx,ebx
 D2Client.dll+CDE12 - 31 C0                 - xor eax,eax
 D2Client.dll+CDE14 - BB *                  - mov ebx,D2Lang.dll+9450
 D2Client.dll+CDE19 - FF D3                 - call ebx
-D2Client.dll+CDE1B - C3                    - ret 
+D2Client.dll+CDE1B - C3                    - ret
 #ce
 
 func InjectFunctions()
@@ -1278,7 +1289,7 @@ endfunc
 func InjectPrintFunction()
 	local $sCode = "0x5368" & GetOffsetAddress($d2inject_string) & "31C0E843FAFAFFC3"
 	local $ret = _MemoryWrite($d2inject_print, $d2handle, $sCode, "byte[14]")
-	
+
 	local $injected = _MemoryRead($d2inject_print, $d2handle)
 	return Hex($injected, 8) == Hex(Binary(Int(StringLeft($sCode, 10))))
 endfunc
@@ -1294,46 +1305,46 @@ endfunc
 func UpdateDllHandles()
 	local $loadlib = _WinAPI_GetProcAddress(_WinAPI_GetModuleHandle("kernel32.dll"), "LoadLibraryA")
 	if (not $loadlib) then return _Debug("UpdateDllHandles", "Couldn't retrieve LoadLibraryA address.")
-	
+
 	local $addr = _MemVirtualAllocEx($d2handle[1], 0, 0x100, 0x3000, 0x40)
 	if (@error) then return _Debug("UpdateDllHandles", "Failed to allocate memory.")
 
 	local $nDlls = UBound($dlls)
 	local $handles[$nDlls]
 	local $failed = False
-	
+
 	for $i = 0 to $nDlls-1
 		_MemoryWrite($addr, $d2handle, $dlls[$i], StringFormat("char[%s]", StringLen($dlls[$i])+1))
 		$handles[$i] = _CreateRemoteThread($loadlib, $addr)
 		if ($handles[$i] == 0) then $failed = True
 	next
-	
+
 	$d2client = $handles[0]
 	$d2common = $handles[1]
 	$d2win = $handles[2]
 	$d2lang = $handles[3]
-	
+
 	local $d2inject = $d2client + 0xCDE00
 	$d2inject_print = $d2inject + 0x0
 	$d2inject_getstring = $d2inject + 0x10
 	$d2inject_string = $d2inject + 0x20
-	
+
 	$d2sgpt = _MemoryRead($d2common + 0x99E1C, $d2handle)
 
 	_MemVirtualFreeEx($d2handle[1], $addr, 0x100, 0x8000)
 	if (@error) then return _Debug("UpdateDllHandles", "Failed to free memory.")
 	if ($failed) then return _Debug("UpdateDllHandles", "Couldn't retrieve dll addresses.")
-	
+
 	return True
 endfunc
 
 func _CreateRemoteThread($func, $var = 0) ; $var is in EBX register
 	local $call = DllCall($d2handle[0], "ptr", "CreateRemoteThread", "ptr", $d2handle[1], "ptr", 0, "uint", 0, "ptr", $func, "ptr", $var, "dword", 0, "ptr", 0)
 	if ($call[0] == 0) then return _Debug("UpdateDllHandles", "Couldn't create remote thread.")
-	
+
 	_WinAPI_WaitForSingleObject($call[0])
 	local $ret = _GetExitCodeThread($call[0])
-	
+
 	_WinAPI_CloseHandle($call[0])
 	return $ret
 endfunc

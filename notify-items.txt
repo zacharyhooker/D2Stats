@@ -1,8 +1,8 @@
 Jewel|Rare|
 Ring|Rare|
 Amulet|Rare|
-Ancient Armor||
-Full Plate Mail||
-Kriegsmesser||
-Gilded Shield||
-Avenger Guard||
+Ancient Armor||Sacred
+Kriegsmesser||Sacred
+Gilded Shield||Sacred
+Avenger Guard||Sacred
+Spiked Shield||Sacred
